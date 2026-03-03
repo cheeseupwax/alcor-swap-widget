@@ -14,19 +14,21 @@ export interface SwapAction {
   data: Record<string, unknown>;
 }
 
+// Shape returned by the rates API
+export interface RawRouteAction {
+  to: string;
+  quantity: string;
+  memo: string;
+}
+
 export interface SwapRoute {
-  actions: SwapAction[];
-  amount_out: string;
+  amount_received: number;
+  minimum_received: number;
   price_impact: number;
-  fee: number;
-  routes: Array<{
-    exchange: string;
-    pool: string;
-    token_in: string;
-    token_out: string;
-    amount_in: string;
-    amount_out: string;
-  }>;
+  fees: number;
+  platform_fees: number;
+  actions: RawRouteAction[];
+  type: string;
 }
 
 const WOE_API = "https://woe-api.neftyblocks.com";
@@ -40,7 +42,6 @@ export async function fetchSwapTokenList(signal?: AbortSignal): Promise<SwapToke
   const res = await fetch(`${WOE_API}/tokens?chain=wax&limit=200`, { signal });
   if (!res.ok) throw new Error("Failed to fetch token list");
   const data = await res.json();
-  // API returns { contract, symbol: { ticker, precision }, ... }
   const seen = new Set<string>();
   return (data as Array<{ contract: string; symbol: { ticker: string; precision: number } }>)
     .filter((t) => {
@@ -64,8 +65,7 @@ export async function fetchSwapRoute(
   slippage: number,
   receiver: string,
   signal?: AbortSignal
-): Promise<SwapRoute> {
-  // API requires amount_in with full decimal precision
+): Promise<SwapRoute | null> {
   const formattedAmount = formatTokenAmount(amountIn, tokenIn.precision);
 
   const params = new URLSearchParams({
@@ -76,11 +76,45 @@ export async function fetchSwapRoute(
     receiver,
     split_max_routes: "3",
     chain: "wax",
+    filter_exchange: "",
+    filter_type: "",
   });
 
   const res = await fetch(`${RATES_API}/routes?${params}`, { signal });
-  if (!res.ok) throw new Error("Failed to fetch swap route");
-  return res.json();
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(text || "Failed to fetch swap route");
+  }
+
+  const text = await res.text();
+  // API may return plain text error like "Missing params!"
+  let data: unknown;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(text || "Invalid route response");
+  }
+
+  if (!Array.isArray(data) || data.length === 0) return null;
+  return data[0] as SwapRoute;
+}
+
+/** Convert raw API actions to Wharf transaction actions */
+export function normalizeRouteActions(
+  route: SwapRoute,
+  accountName: string
+): SwapAction[] {
+  return route.actions.map((a) => ({
+    account: a.to,
+    name: "transfer",
+    authorization: [{ actor: accountName, permission: "active" }],
+    data: {
+      from: accountName,
+      to: a.to,
+      quantity: a.quantity,
+      memo: a.memo,
+    },
+  }));
 }
 
 export async function fetchTokenWaxPrice(
@@ -113,9 +147,14 @@ export async function fetchTokenBalance(
   if (!res.ok) return "0";
   const data: string[] = await res.json();
   if (!data || data.length === 0) return "0";
-  // Response: ["123.45670000 WAX"] — extract numeric part
   return data[0].split(" ")[0];
 }
+
+// Preferred contracts for deterministic default pair selection
+export const PREFERRED_CONTRACTS: Record<string, string> = {
+  WAX: "eosio.token",
+  CHEESE: "cheeseburger",
+};
 
 // Popular tokens pinned at top of selector
 export const POPULAR_TICKERS = ["WAX", "CHEESE", "LSWAX", "TLM", "WAXUSDC"];
