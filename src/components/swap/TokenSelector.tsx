@@ -1,5 +1,5 @@
 import { useState, useMemo, forwardRef } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useSwapTokens } from "@/hooks/useSwapTokens";
@@ -45,6 +45,7 @@ export const TokenSelector = forwardRef<HTMLDivElement, TokenSelectorProps>(
         <DialogContent className="bg-card border-border max-w-md">
           <DialogHeader>
             <DialogTitle className="text-foreground">Select Token</DialogTitle>
+            <DialogDescription className="sr-only">Search and select a token to swap</DialogDescription>
           </DialogHeader>
 
           <Input

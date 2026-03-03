@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchTokenBalance, type SwapToken, POPULAR_TICKERS } from "@/lib/swapApi";
+import { fetchAllTokenBalances, fetchSingleTokenBalance } from "@/lib/waxRpcFallback";
+import { type SwapToken, POPULAR_TICKERS } from "@/lib/swapApi";
 
 /**
- * Lazy token balance fetcher — only fetches when enabled (selector open).
- * Fetches popular tokens first, then remainder in batches.
+ * Fetches all token balances via Hyperion (1 request) instead of 200+ individual RPC calls.
+ * Falls back to RPC for popular tokens if Hyperion data is stale.
  */
 export function useTokenBalances(
   accountName: string | null,
@@ -11,24 +12,46 @@ export function useTokenBalances(
   enabled: boolean = true
 ) {
   const { data: balances } = useQuery({
-    queryKey: ["token-balances", accountName, tokens.length],
+    queryKey: ["token-balances", accountName],
     queryFn: async () => {
       const map = new Map<string, string>();
-      // Prioritize popular tokens first
-      const popular = tokens.filter((t) => POPULAR_TICKERS.includes(t.ticker));
-      const rest = tokens.filter((t) => !POPULAR_TICKERS.includes(t.ticker));
-      const ordered = [...popular, ...rest];
 
-      const batchSize = 10;
-      for (let i = 0; i < ordered.length; i += batchSize) {
-        const batch = ordered.slice(i, i + batchSize);
-        const results = await Promise.all(
-          batch.map((t) => fetchTokenBalance(accountName!, t.contract, t.ticker))
+      try {
+        const result = await fetchAllTokenBalances(accountName!);
+
+        for (const t of result.tokens) {
+          map.set(`${t.symbol}_${t.contract}`, String(t.amount));
+        }
+
+        // If Hyperion is stale, supplement with RPC for popular tokens
+        if (result.isStale) {
+          const popular = tokens.filter((t) => POPULAR_TICKERS.includes(t.ticker));
+          const rpcResults = await Promise.all(
+            popular.map((t) =>
+              fetchSingleTokenBalance(accountName!, t.contract, t.ticker)
+            )
+          );
+          popular.forEach((t, idx) => {
+            if (rpcResults[idx] > 0) {
+              map.set(`${t.ticker}_${t.contract}`, String(rpcResults[idx]));
+            }
+          });
+        }
+      } catch (err) {
+        console.warn("[useTokenBalances] Hyperion failed, falling back to RPC for popular tokens", err);
+        const popular = tokens.filter((t) => POPULAR_TICKERS.includes(t.ticker));
+        const rpcResults = await Promise.all(
+          popular.map((t) =>
+            fetchSingleTokenBalance(accountName!, t.contract, t.ticker)
+          )
         );
-        batch.forEach((t, idx) => {
-          map.set(`${t.ticker}_${t.contract}`, results[idx]);
+        popular.forEach((t, idx) => {
+          if (rpcResults[idx] > 0) {
+            map.set(`${t.ticker}_${t.contract}`, String(rpcResults[idx]));
+          }
         });
       }
+
       return map;
     },
     enabled: !!accountName && tokens.length > 0 && enabled,

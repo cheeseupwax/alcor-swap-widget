@@ -1,4 +1,5 @@
 // WaxOnEdge + Alcor API layer for CHEESESwap
+import { waxRpcCall } from "./waxRpcFallback";
 
 export interface SwapToken {
   contract: string;
@@ -140,15 +141,16 @@ export async function fetchTokenBalance(
   contract: string,
   ticker: string
 ): Promise<string> {
-  const res = await fetch("https://wax.greymass.com/v1/chain/get_currency_balance", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ code: contract, account, symbol: ticker }),
-  });
-  if (!res.ok) return "0";
-  const data: string[] = await res.json();
-  if (!data || data.length === 0) return "0";
-  return data[0].split(" ")[0];
+  try {
+    const data = await waxRpcCall<string[]>(
+      '/v1/chain/get_currency_balance',
+      { code: contract, account, symbol: ticker }
+    );
+    if (!data || data.length === 0) return "0";
+    return data[0].split(" ")[0];
+  } catch {
+    return "0";
+  }
 }
 
 // Preferred contracts for deterministic default pair selection

@@ -26,7 +26,7 @@ export const useWallet = () => useContext(WalletContext);
 
 const WAX_CHAIN = {
   id: "1064487b3cd1a897ce03ae5b6a865651747e2e152090f99c1d19d44e01aea5a4",
-  url: "https://wax.greymass.com",
+  url: "https://wax.eosphere.io",
 };
 
 let sessionKit: SessionKit | null = null;
