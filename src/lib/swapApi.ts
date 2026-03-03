@@ -102,10 +102,11 @@ export async function fetchSwapRoute(
 /** Convert raw API actions to Wharf transaction actions */
 export function normalizeRouteActions(
   route: SwapRoute,
-  accountName: string
+  accountName: string,
+  inputTokenContract: string
 ): SwapAction[] {
   return route.actions.map((a) => ({
-    account: a.to,
+    account: inputTokenContract,
     name: "transfer",
     authorization: [{ actor: accountName, permission: "active" }],
     data: {

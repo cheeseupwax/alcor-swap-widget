@@ -102,7 +102,7 @@ export function CheeseSwapWidget({
     if (!route || !accountName) return;
     setIsSwapping(true);
     try {
-      const actions = normalizeRouteActions(route, accountName);
+      const actions = normalizeRouteActions(route, accountName, tokenIn!.contract);
       await transact(actions);
       toast.success("Swap successful!", {
         description: `Swapped ${amountIn} ${tokenIn?.ticker} → ${estimatedOutput} ${tokenOut?.ticker}`,
