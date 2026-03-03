@@ -67,7 +67,7 @@ export function CheeseSwapWidget({
   const balanceIn = useTokenBalance(accountName, tokenIn?.contract, tokenIn?.ticker);
   const balanceOut = useTokenBalance(accountName, tokenOut?.contract, tokenOut?.ticker);
 
-  const { route, isFetching: routeLoading, error: routeError } = useSwapRoute(
+  const { route, isFetching: routeLoading, error: routeError, noRoute } = useSwapRoute(
     tokenIn,
     tokenOut,
     amountIn,
@@ -310,8 +310,10 @@ export function CheeseSwapWidget({
           "Enter amount"
         ) : routeLoading ? (
           "Finding best route..."
-        ) : routeError ? (
+        ) : routeError || noRoute ? (
           "No route available"
+        ) : !route ? (
+          "Enter amount"
         ) : (
           "Swap"
         )}
