@@ -1,52 +1,65 @@
 
+Goal: make the token selector open reliably/instantly again, restore route fetching, and separate harmless adblock noise from real errors.
 
-## Use CHEESEHub's RPC Fallback and API Settings
+What I found
+1) The selector open path is currently fragile:
+- `TokenSelector` is wrapped in `forwardRef` but the forwarded ref is never used.
+- Console shows `Function components cannot be given refs... Check the render method of DialogContent`.
+- This warning appears exactly when opening the selector, which can cause Dialog focus/open behavior to fail or close immediately.
 
-### Overview
-Port the proven RPC fallback infrastructure, Hyperion balance fetching, and WharfKit configuration from your [CHEESEHub](/projects/f600f253-304d-4d14-bbfc-83234df294dc) project into this swap project. This replaces the current single-endpoint setup (wax.greymass.com) that causes 500 errors and RPC flooding.
+2) Route lookup is not consistently firing:
+- In your captured network, I see token list + balance RPC calls, but no `rates.neftyblocks.com/api/swap/routes` request during the failing snapshot.
+- That means the route query is often not enabled (state mismatch) rather than “API is down”.
 
-### Changes
+3) Adblock messages are expected noise:
+- `posthog` / `osano` `ERR_BLOCKED_BY_CLIENT` are from browser extensions, not your swap app.
+- They can be ignored unless you specifically need those analytics scripts.
 
-#### 1. Create `src/lib/waxRpcFallback.ts` (new file)
-Copy from CHEESEHub. Provides:
-- `WAX_RPC_ENDPOINTS` array: eosphere, waxsweden, pink.gg, eosusa, alohaeos (greymass removed due to CORS issues)
-- `HYPERION_ENDPOINTS` array for batch balance queries
-- `waxRpcCall()` -- generic RPC with automatic fallback across endpoints, 8s timeout per endpoint
-- `fetchAllTokenBalances()` -- single Hyperion call (`/v2/state/get_tokens`) returns ALL balances for an account in one request (instead of 200+ individual calls)
-- `fetchSingleTokenBalance()` -- RPC fallback for individual token balance
-- `fetchTableRows()` -- table query with fallback
+Implementation plan (in order)
+1) Stabilize TokenSelector component
+- File: `src/components/swap/TokenSelector.tsx`
+- Convert `TokenSelector` from `forwardRef(...)` to a plain function component.
+- Keep `DialogDescription` (already good).
+- Add a deterministic open behavior:
+  - preserve controlled `open` prop
+  - avoid immediate close loops from focus timing by handling open/close explicitly
+  - keep deferred balance fetch, but only after modal is visibly mounted.
 
-#### 2. Create `src/lib/waxConfig.ts` (new file)
-Copy from CHEESEHub. Central WAX chain configuration:
-- `WAX_CHAIN` with chain ID and RPC URL list
-- `CHEESE_CONFIG` with token contract details
+2) Make selector open fast regardless of balances
+- File: `src/components/swap/TokenSelector.tsx`
+- Do not gate rendering on balance fetch.
+- Render token list immediately from cached token list.
+- Keep balances as progressive enhancement (background update only).
+- Add lightweight “syncing balances…” hint instead of blocking any UI.
 
-#### 3. Update `src/lib/swapApi.ts`
-- Replace `fetchTokenBalance()` to use `waxRpcCall` from the new fallback module instead of hardcoded `wax.greymass.com`
-- Keep the swap-specific API functions (fetchSwapTokenList, fetchSwapRoute, normalizeRouteActions) unchanged
+3) Harden route query enable logic
+- File: `src/hooks/useSwapRoute.ts`
+- Require: tokenIn, tokenOut, amount>0, receiver, and tokenIn/tokenOut not identical.
+- Keep debounce, but ensure query starts as soon as these conditions are true.
+- Return explicit `noRoute` state when API returns `[]` (not an exception).
 
-#### 4. Rewrite `src/hooks/useTokenBalances.ts`
-Replace the current approach (200+ individual RPC calls) with Hyperion:
-- Call `fetchAllTokenBalances(account)` -- one HTTP request returns all balances
-- Build the balance Map from the Hyperion response
-- If Hyperion reports stale data, fall back to RPC for popular tokens only
-- Only fetch when selector is open (`enabled` flag)
+4) Fix swap button state messaging
+- File: `src/components/swap/CheeseSwapWidget.tsx`
+- Use `noRoute` from hook so button text and disabled state are consistent:
+  - “No route available” only when true no-route/error
+  - avoid showing enabled-looking state when `route` is undefined.
+- Keep current transaction action mapping fix intact.
 
-#### 5. Update `src/contexts/WalletContext.tsx`
-- Use `wax.eosphere.io` as primary RPC (matching CHEESEHub) instead of `wax.greymass.com`
-- Keep the same SessionKit/WharfKit setup
+5) Keep console noise cleanly separated
+- No code change required for Posthog/Osano blocks.
+- Treat those as non-blocking and focus diagnostics on:
+  - Dialog ref/focus warnings
+  - missing `/routes` request
+  - actual RPC/API failures.
 
-#### 6. Fix `src/components/swap/TokenSelector.tsx`
-- Add missing `DialogDescription` (fixes the console warning)
-
-### Why This Fixes the Issues
-- **RPC flooding eliminated**: Hyperion returns all balances in 1 request instead of 200+
-- **No more 500 errors**: If one endpoint fails, automatically tries the next
-- **Token selector responsive**: No heavy RPC load blocking the UI thread
-- **greymass.com removed**: Known to have CORS and rate-limiting issues in browser contexts
-
-### Technical Notes
-- The `posthog` and `osano` errors in your console are from an ad blocker -- harmless and unrelated
-- `wax.greymass.com` is still used for Greymass Fuel (free CPU/NET for Anchor users) but not for general RPC calls
-- Hyperion staleness detection (5-minute threshold) ensures balance accuracy
-
+Validation checklist after changes
+1) Click either token button: selector opens immediately every time.
+2) Type in search and pick token: modal closes and selection updates.
+3) Enter amount: `/api/swap/routes` request appears and quote updates.
+4) Swap button states:
+- disconnected: Connect Wallet
+- no amount: Enter amount
+- fetching: Finding best route...
+- no route: No route available
+- valid route: Swap
+5) Console should no longer show the Dialog ref warning.
