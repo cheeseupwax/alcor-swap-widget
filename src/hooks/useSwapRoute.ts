@@ -16,8 +16,11 @@ export function useSwapRoute(
     return () => clearTimeout(timer);
   }, [amountIn]);
 
+  const tokensIdentical =
+    !!tokenIn && !!tokenOut && tokenIn.ticker === tokenOut.ticker && tokenIn.contract === tokenOut.contract;
+
   const enabled =
-    !!tokenIn && !!tokenOut && !!debouncedAmount && parseFloat(debouncedAmount) > 0 && !!receiver;
+    !!tokenIn && !!tokenOut && !tokensIdentical && !!debouncedAmount && parseFloat(debouncedAmount) > 0 && !!receiver && receiver !== "placeholder111";
 
   const { data: route, isLoading, error, isFetching } = useQuery<SwapRoute | null>({
     queryKey: ["swap-route", tokenIn?.ticker, tokenIn?.contract, tokenOut?.ticker, tokenOut?.contract, debouncedAmount, slippage, receiver],
@@ -28,5 +31,8 @@ export function useSwapRoute(
     retry: 1,
   });
 
-  return { route: route ?? undefined, isLoading: isLoading && enabled, isFetching, error };
+  // noRoute: query ran successfully but API returned null (empty array)
+  const noRoute = enabled && !isLoading && !isFetching && !error && route === null;
+
+  return { route: route ?? undefined, isLoading: isLoading && enabled, isFetching, error, noRoute };
 }

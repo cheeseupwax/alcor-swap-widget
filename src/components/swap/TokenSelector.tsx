@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, forwardRef } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -14,8 +14,7 @@ interface TokenSelectorProps {
   selectedToken?: SwapToken | null;
 }
 
-export const TokenSelector = forwardRef<HTMLDivElement, TokenSelectorProps>(
-  function TokenSelector({ open, onClose, onSelect, selectedToken }, _ref) {
+export function TokenSelector({ open, onClose, onSelect, selectedToken }: TokenSelectorProps) {
     const { filteredTokens, popularTokens, tokens, isLoading, search, setSearch } = useSwapTokens();
     const { accountName } = useWallet();
     const [balanceFetchEnabled, setBalanceFetchEnabled] = useState(false);
@@ -131,8 +130,7 @@ export const TokenSelector = forwardRef<HTMLDivElement, TokenSelectorProps>(
         </DialogContent>
       </Dialog>
     );
-  }
-);
+}
 
 function TokenLogo({
   token,
