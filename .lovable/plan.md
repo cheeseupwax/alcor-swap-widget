@@ -1,54 +1,52 @@
 
 
-## Fix: "transfer" action not found on swap.we
+## Use CHEESEHub's RPC Fallback and API Settings
 
-### Problem
-The `normalizeRouteActions` function incorrectly sets `account: a.to` (the DEX router, e.g. `swap.we`). On WAX/EOSIO, `transfer` is an action on the **token contract** (e.g. `eosio.token`), not the DEX. The DEX address goes in `data.to`.
+### Overview
+Port the proven RPC fallback infrastructure, Hyperion balance fetching, and WharfKit configuration from your [CHEESEHub](/projects/f600f253-304d-4d14-bbfc-83234df294dc) project into this swap project. This replaces the current single-endpoint setup (wax.greymass.com) that causes 500 errors and RPC flooding.
 
-No smart contract is needed -- this is purely a client-side mapping fix.
+### Changes
 
-### The Fix
+#### 1. Create `src/lib/waxRpcFallback.ts` (new file)
+Copy from CHEESEHub. Provides:
+- `WAX_RPC_ENDPOINTS` array: eosphere, waxsweden, pink.gg, eosusa, alohaeos (greymass removed due to CORS issues)
+- `HYPERION_ENDPOINTS` array for batch balance queries
+- `waxRpcCall()` -- generic RPC with automatic fallback across endpoints, 8s timeout per endpoint
+- `fetchAllTokenBalances()` -- single Hyperion call (`/v2/state/get_tokens`) returns ALL balances for an account in one request (instead of 200+ individual calls)
+- `fetchSingleTokenBalance()` -- RPC fallback for individual token balance
+- `fetchTableRows()` -- table query with fallback
 
-**File: `src/lib/swapApi.ts`** -- Update `normalizeRouteActions`:
+#### 2. Create `src/lib/waxConfig.ts` (new file)
+Copy from CHEESEHub. Central WAX chain configuration:
+- `WAX_CHAIN` with chain ID and RPC URL list
+- `CHEESE_CONFIG` with token contract details
 
-The function needs to know which token contract to call `transfer` on. The quantity string contains the ticker (e.g. `"1.00000000 WAX"`), and we need to resolve that to the input token's contract.
+#### 3. Update `src/lib/swapApi.ts`
+- Replace `fetchTokenBalance()` to use `waxRpcCall` from the new fallback module instead of hardcoded `wax.greymass.com`
+- Keep the swap-specific API functions (fetchSwapTokenList, fetchSwapRoute, normalizeRouteActions) unchanged
 
-The simplest approach: pass `tokenIn` (the input token) into the normalizer. For single-hop swaps (which is the common case from this API), the first action always transfers the input token. For multi-hop, each action's quantity contains the token symbol which can be matched.
+#### 4. Rewrite `src/hooks/useTokenBalances.ts`
+Replace the current approach (200+ individual RPC calls) with Hyperion:
+- Call `fetchAllTokenBalances(account)` -- one HTTP request returns all balances
+- Build the balance Map from the Hyperion response
+- If Hyperion reports stale data, fall back to RPC for popular tokens only
+- Only fetch when selector is open (`enabled` flag)
 
-Since the API currently returns single-action routes where the user sends their input token to the router, we can use the input token's contract directly:
+#### 5. Update `src/contexts/WalletContext.tsx`
+- Use `wax.eosphere.io` as primary RPC (matching CHEESEHub) instead of `wax.greymass.com`
+- Keep the same SessionKit/WharfKit setup
 
-```typescript
-export function normalizeRouteActions(
-  route: SwapRoute,
-  accountName: string,
-  inputTokenContract: string  // e.g. "eosio.token"
-): SwapAction[] {
-  return route.actions.map((a) => ({
-    account: inputTokenContract,  // transfer lives on token contract
-    name: "transfer",
-    authorization: [{ actor: accountName, permission: "active" }],
-    data: {
-      from: accountName,
-      to: a.to,           // send tokens TO the DEX router
-      quantity: a.quantity,
-      memo: a.memo,
-    },
-  }));
-}
-```
+#### 6. Fix `src/components/swap/TokenSelector.tsx`
+- Add missing `DialogDescription` (fixes the console warning)
 
-**File: `src/components/swap/CheeseSwapWidget.tsx`** -- Update the `handleSwap` call:
-
-Pass `tokenIn.contract` to `normalizeRouteActions`:
-
-```typescript
-const actions = normalizeRouteActions(route, accountName, tokenIn!.contract);
-```
-
-### Why This Works
-On EOSIO chains, token transfers always call the `transfer` action on the token's own contract (`eosio.token`, `cheeseburger`, etc.), with the recipient in the `to` data field. The DEX router (`swap.we`) receives the tokens and reads the `memo` to know how to route the swap.
+### Why This Fixes the Issues
+- **RPC flooding eliminated**: Hyperion returns all balances in 1 request instead of 200+
+- **No more 500 errors**: If one endpoint fails, automatically tries the next
+- **Token selector responsive**: No heavy RPC load blocking the UI thread
+- **greymass.com removed**: Known to have CORS and rate-limiting issues in browser contexts
 
 ### Technical Notes
-- No smart contract deployment needed
-- Two files changed, ~3 lines modified total
-- The API response structure `{to, quantity, memo}` already contains all needed data -- just the contract target was wrong
+- The `posthog` and `osano` errors in your console are from an ad blocker -- harmless and unrelated
+- `wax.greymass.com` is still used for Greymass Fuel (free CPU/NET for Anchor users) but not for general RPC calls
+- Hyperion staleness detection (5-minute threshold) ensures balance accuracy
+
