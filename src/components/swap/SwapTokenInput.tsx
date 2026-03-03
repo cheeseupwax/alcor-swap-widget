@@ -51,6 +51,7 @@ export function SwapTokenInput({
 
       <div className="flex items-center gap-3">
         <button
+          type="button"
           onClick={onTokenClick}
           className="flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors shrink-0"
         >
@@ -92,6 +93,7 @@ export function SwapTokenInput({
         <div className="flex gap-1.5 mt-3">
           {PERCENT_BUTTONS.map((pct) => (
             <button
+              type="button"
               key={pct}
               onClick={() => handlePercentClick(pct)}
               className="px-2.5 py-1 text-xs font-medium rounded-md bg-secondary text-muted-foreground hover:text-foreground hover:bg-cheese-gold/10 hover:text-cheese-gold transition-colors"
