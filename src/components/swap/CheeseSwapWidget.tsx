@@ -170,7 +170,7 @@ export function CheeseSwapWidget({
       </div>
 
       {/* Swap panels */}
-      <div className="relative space-y-1">
+      <div className="relative space-y-0">
         <SwapTokenInput
           label="You pay"
           token={tokenIn}
@@ -180,8 +180,8 @@ export function CheeseSwapWidget({
           balance={balanceIn ?? undefined}
         />
 
-        {/* Flip button */}
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
+        {/* Flip button — between panels, not overlapping content */}
+        <div className="flex justify-center -my-2 relative z-10">
           <motion.button
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9, rotate: 180 }}
