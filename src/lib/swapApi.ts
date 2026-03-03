@@ -65,10 +65,13 @@ export async function fetchSwapRoute(
   receiver: string,
   signal?: AbortSignal
 ): Promise<SwapRoute> {
+  // API requires amount_in with full decimal precision
+  const formattedAmount = formatTokenAmount(amountIn, tokenIn.precision);
+
   const params = new URLSearchParams({
     token_in: `${tokenIn.ticker}_${tokenIn.contract}`,
     token_out: `${tokenOut.ticker}_${tokenOut.contract}`,
-    amount_in: amountIn,
+    amount_in: formattedAmount,
     slippage: slippage.toString(),
     receiver,
     split_max_routes: "3",
@@ -95,6 +98,23 @@ export function formatTokenAmount(amount: number | string, precision: number): s
   const num = typeof amount === "string" ? parseFloat(amount) : amount;
   if (isNaN(num)) return "0";
   return num.toFixed(precision);
+}
+
+export async function fetchTokenBalance(
+  account: string,
+  contract: string,
+  ticker: string
+): Promise<string> {
+  const res = await fetch("https://wax.greymass.com/v1/chain/get_currency_balance", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code: contract, account, symbol: ticker }),
+  });
+  if (!res.ok) return "0";
+  const data: string[] = await res.json();
+  if (!data || data.length === 0) return "0";
+  // Response: ["123.45670000 WAX"] — extract numeric part
+  return data[0].split(" ")[0];
 }
 
 // Popular tokens pinned at top of selector

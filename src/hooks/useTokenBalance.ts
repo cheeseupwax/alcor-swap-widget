@@ -1,0 +1,18 @@
+import { useQuery } from "@tanstack/react-query";
+import { fetchTokenBalance } from "@/lib/swapApi";
+
+export function useTokenBalance(
+  accountName: string | null,
+  contract?: string,
+  ticker?: string
+) {
+  const { data: balance } = useQuery({
+    queryKey: ["token-balance", accountName, contract, ticker],
+    queryFn: () => fetchTokenBalance(accountName!, contract!, ticker!),
+    enabled: !!accountName && !!contract && !!ticker,
+    staleTime: 15_000,
+    gcTime: 60_000,
+  });
+
+  return balance ?? null;
+}
