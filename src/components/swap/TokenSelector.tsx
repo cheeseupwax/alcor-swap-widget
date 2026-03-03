@@ -20,7 +20,9 @@ export function TokenSelector({ open, onClose, onSelect, selectedToken }: TokenS
   const balances = useTokenBalances(accountName, tokens);
   const [imgErrors, setImgErrors] = useState<Set<string>>(new Set());
 
-  // Sort: tokens with balances first (among non-popular filtered tokens)
+  const tokenKey = (t: SwapToken) => `${t.ticker}_${t.contract}`;
+
+  // Sort: tokens with balances first
   const sortedFilteredTokens = useMemo(() => {
     return [...filteredTokens].sort((a, b) => {
       const balA = parseFloat(balances.get(tokenKey(a)) ?? "0");
@@ -36,8 +38,6 @@ export function TokenSelector({ open, onClose, onSelect, selectedToken }: TokenS
     onClose();
     setSearch("");
   };
-
-  const tokenKey = (t: SwapToken) => `${t.ticker}_${t.contract}`;
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
