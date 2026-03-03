@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchTokenBalance } from "@/lib/swapApi";
+import { fetchSingleTokenBalance } from "@/lib/waxRpcFallback";
 
 export function useTokenBalance(
   accountName: string | null,
@@ -8,7 +8,10 @@ export function useTokenBalance(
 ) {
   const { data: balance } = useQuery({
     queryKey: ["token-balance", accountName, contract, ticker],
-    queryFn: () => fetchTokenBalance(accountName!, contract!, ticker!),
+    queryFn: async () => {
+      const amount = await fetchSingleTokenBalance(accountName!, contract!, ticker!);
+      return amount > 0 ? String(amount) : null;
+    },
     enabled: !!accountName && !!contract && !!ticker,
     staleTime: 15_000,
     gcTime: 60_000,
