@@ -8,7 +8,7 @@ import { useSwapTokens } from "@/hooks/useSwapTokens";
 import { useSwapRoute } from "@/hooks/useSwapRoute";
 import { useTokenBalance } from "@/hooks/useTokenBalance";
 import { useWallet } from "@/contexts/WalletContext";
-import { type SwapToken, formatTokenAmount } from "@/lib/swapApi";
+import { type SwapToken, formatTokenAmount, normalizeRouteActions, PREFERRED_CONTRACTS } from "@/lib/swapApi";
 import { toast } from "sonner";
 
 interface CheeseSwapWidgetProps {
@@ -37,15 +37,23 @@ export function CheeseSwapWidget({
     return saved ? parseFloat(saved) : 1;
   });
   const [customSlippage, setCustomSlippage] = useState("");
-  const [selectorOpen, setSelectorOpen] = useState<"in" | "out" | null>(null);
+  const [selectorSide, setSelectorSide] = useState<"in" | "out" | null>(null);
   const [showRouteDetails, setShowRouteDetails] = useState(false);
   const [isSwapping, setIsSwapping] = useState(false);
 
-  // Set defaults when tokens load
+  // Set defaults when tokens load — use preferred contracts to avoid collisions
   useEffect(() => {
     if (tokens.length > 0 && !tokenIn) {
-      const defaultIn = tokens.find((t) => t.ticker === defaultInputTicker);
-      const defaultOut = tokens.find((t) => t.ticker === defaultOutputTicker);
+      const findToken = (ticker: string) => {
+        const preferred = PREFERRED_CONTRACTS[ticker];
+        if (preferred) {
+          const exact = tokens.find((t) => t.ticker === ticker && t.contract === preferred);
+          if (exact) return exact;
+        }
+        return tokens.find((t) => t.ticker === ticker);
+      };
+      const defaultIn = findToken(defaultInputTicker);
+      const defaultOut = findToken(defaultOutputTicker);
       if (defaultIn) setTokenIn(defaultIn);
       if (defaultOut) setTokenOut(defaultOut);
     }
@@ -86,15 +94,16 @@ export function CheeseSwapWidget({
     }
   };
 
-  const estimatedOutput = route?.amount_out
-    ? formatTokenAmount(route.amount_out, tokenOut?.precision ?? 4)
+  const estimatedOutput = route?.amount_received
+    ? formatTokenAmount(route.amount_received, tokenOut?.precision ?? 4)
     : "";
 
   const handleSwap = async () => {
-    if (!route) return;
+    if (!route || !accountName) return;
     setIsSwapping(true);
     try {
-      await transact(route.actions);
+      const actions = normalizeRouteActions(route, accountName);
+      await transact(actions);
       toast.success("Swap successful!", {
         description: `Swapped ${amountIn} ${tokenIn?.ticker} → ${estimatedOutput} ${tokenOut?.ticker}`,
       });
@@ -109,7 +118,12 @@ export function CheeseSwapWidget({
     }
   };
 
-  const canSwap = !!route && !!accountName && parseFloat(amountIn) > 0 && !routeLoading;
+  const canSwap = !!route && route.actions.length > 0 && !!accountName && parseFloat(amountIn) > 0 && !routeLoading;
+
+  const handleTokenSelect = useCallback((token: SwapToken) => {
+    if (selectorSide === "in") setTokenIn(token);
+    else if (selectorSide === "out") setTokenOut(token);
+  }, [selectorSide]);
 
   return (
     <div className="w-full max-w-[440px] mx-auto">
@@ -162,7 +176,7 @@ export function CheeseSwapWidget({
           token={tokenIn}
           amount={amountIn}
           onAmountChange={setAmountIn}
-          onTokenClick={() => setSelectorOpen("in")}
+          onTokenClick={() => setSelectorSide("in")}
           balance={balanceIn ?? undefined}
         />
 
@@ -182,7 +196,7 @@ export function CheeseSwapWidget({
           label="You receive"
           token={tokenOut}
           amount={estimatedOutput}
-          onTokenClick={() => setSelectorOpen("out")}
+          onTokenClick={() => setSelectorSide("out")}
           readOnly
           loading={routeLoading && parseFloat(amountIn) > 0}
           balance={balanceOut ?? undefined}
@@ -193,7 +207,7 @@ export function CheeseSwapWidget({
       {routeError && parseFloat(amountIn) > 0 && (
         <div className="mt-3 flex items-center gap-2 text-destructive text-sm px-1">
           <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>Unable to find a route for this swap</span>
+          <span>{(routeError as Error)?.message || "Unable to find a route for this swap"}</span>
         </div>
       )}
 
@@ -207,9 +221,9 @@ export function CheeseSwapWidget({
             <span className="text-muted-foreground">
               1 {tokenIn?.ticker} ≈{" "}
               <span className="text-foreground font-mono">
-                {route.amount_out && amountIn
+                {route.amount_received && amountIn
                   ? formatTokenAmount(
-                      parseFloat(route.amount_out) / parseFloat(amountIn),
+                      route.amount_received / parseFloat(amountIn),
                       tokenOut?.precision ?? 4
                     )
                   : "—"}{" "}
@@ -251,26 +265,12 @@ export function CheeseSwapWidget({
                     <span className="text-muted-foreground">Slippage</span>
                     <span className="text-foreground">{slippage}%</span>
                   </div>
-                  {route.routes && route.routes.length > 0 && (
-                    <div>
-                      <span className="text-muted-foreground text-xs">Route</span>
-                      <div className="mt-1 space-y-1">
-                        {route.routes.map((r, i) => (
-                          <div
-                            key={i}
-                            className="flex items-center gap-2 text-xs text-muted-foreground"
-                          >
-                            <span className="px-1.5 py-0.5 bg-secondary rounded text-foreground font-medium">
-                              {r.exchange}
-                            </span>
-                            <span>
-                              {r.token_in} → {r.token_out}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Min. Received</span>
+                    <span className="text-foreground font-mono">
+                      {formatTokenAmount(route.minimum_received, tokenOut?.precision ?? 4)} {tokenOut?.ticker}
+                    </span>
+                  </div>
                 </div>
               </motion.div>
             )}
@@ -317,18 +317,12 @@ export function CheeseSwapWidget({
         )}
       </motion.button>
 
-      {/* Token selectors */}
+      {/* Single token selector instance */}
       <TokenSelector
-        open={selectorOpen === "in"}
-        onClose={() => setSelectorOpen(null)}
-        onSelect={setTokenIn}
-        selectedToken={tokenIn}
-      />
-      <TokenSelector
-        open={selectorOpen === "out"}
-        onClose={() => setSelectorOpen(null)}
-        onSelect={setTokenOut}
-        selectedToken={tokenOut}
+        open={selectorSide !== null}
+        onClose={() => setSelectorSide(null)}
+        onSelect={handleTokenSelect}
+        selectedToken={selectorSide === "in" ? tokenIn : tokenOut}
       />
     </div>
   );
