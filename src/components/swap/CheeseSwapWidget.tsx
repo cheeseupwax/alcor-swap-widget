@@ -319,13 +319,16 @@ export function CheeseSwapWidget({
         )}
       </motion.button>
 
-      {/* Single token selector instance */}
-      <TokenSelector
-        open={selectorSide !== null}
-        onClose={() => setSelectorSide(null)}
-        onSelect={handleTokenSelect}
-        selectedToken={selectorSide === "in" ? tokenIn : tokenOut}
-      />
+      {/* Token selector (mount only when opened for stable Dialog behavior) */}
+      {selectorSide && (
+        <TokenSelector
+          key={selectorSide}
+          open
+          onClose={() => setSelectorSide(null)}
+          onSelect={handleTokenSelect}
+          selectedToken={selectorSide === "in" ? tokenIn : tokenOut}
+        />
+      )}
     </div>
   );
 }
