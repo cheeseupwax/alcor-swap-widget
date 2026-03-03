@@ -1,4 +1,4 @@
-import { useState, useMemo, forwardRef } from "react";
+import { useState, useMemo, useEffect, forwardRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -18,11 +18,19 @@ export const TokenSelector = forwardRef<HTMLDivElement, TokenSelectorProps>(
   function TokenSelector({ open, onClose, onSelect, selectedToken }, _ref) {
     const { filteredTokens, popularTokens, tokens, isLoading, search, setSearch } = useSwapTokens();
     const { accountName } = useWallet();
-    // Only fetch balances when selector is open
-    const balances = useTokenBalances(accountName, tokens, open);
+    const [balanceFetchEnabled, setBalanceFetchEnabled] = useState(false);
+    const balances = useTokenBalances(accountName, tokens, balanceFetchEnabled);
     const [imgErrors, setImgErrors] = useState<Set<string>>(new Set());
 
     const tokenKey = (t: SwapToken) => `${t.ticker}_${t.contract}`;
+
+    useEffect(() => {
+      if (open) {
+        const id = window.setTimeout(() => setBalanceFetchEnabled(true), 80);
+        return () => window.clearTimeout(id);
+      }
+      setBalanceFetchEnabled(false);
+    }, [open]);
 
     const sortedFilteredTokens = useMemo(() => {
       return [...filteredTokens].sort((a, b) => {
@@ -60,7 +68,8 @@ export const TokenSelector = forwardRef<HTMLDivElement, TokenSelectorProps>(
           {!search && popularTokens.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {popularTokens.map((t) => (
-                <button
+                  <button
+                    type="button"
                   key={tokenKey(t)}
                   onClick={() => handleSelect(t)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
@@ -93,6 +102,7 @@ export const TokenSelector = forwardRef<HTMLDivElement, TokenSelectorProps>(
                   const numBal = parseFloat(bal ?? "0");
                   return (
                     <button
+                      type="button"
                       key={tokenKey(t)}
                       onClick={() => handleSelect(t)}
                       disabled={!!isSelected}
