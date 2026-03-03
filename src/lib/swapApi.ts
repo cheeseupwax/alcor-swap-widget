@@ -36,7 +36,7 @@ const WOE_API = "https://woe-api.neftyblocks.com";
 const RATES_API = "https://rates.neftyblocks.com/api/swap";
 
 export function getTokenLogoUrl(contract: string, ticker: string): string {
-  return `https://raw.githubusercontent.com/aspect-build/wax-token-logos/refs/heads/master/logos/${ticker.toLowerCase()}_${contract}.png`;
+  return `https://raw.githubusercontent.com/alcorexchange/alcor-ui/master/assets/tokens/wax/${ticker.toLowerCase()}_${contract}.png`;
 }
 
 export async function fetchSwapTokenList(signal?: AbortSignal): Promise<SwapToken[]> {
