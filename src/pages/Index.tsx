@@ -1,12 +1,33 @@
 import { CheeseSwapWidget } from "@/components/swap/CheeseSwapWidget";
+import { useWallet } from "@/contexts/WalletContext";
+import { LogOut, Wallet } from "lucide-react";
 
 const Index = () => {
+  const { accountName, login, logout, isLoggingIn } = useWallet();
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       {/* Ambient glow */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full bg-cheese-gold/5 blur-[120px]" />
       </div>
+
+      {/* Wallet status bar */}
+      {accountName && (
+        <div className="fixed top-4 right-4 z-20 flex items-center gap-2">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-card border border-border text-sm">
+            <Wallet className="w-4 h-4 text-primary" />
+            <span className="font-mono text-foreground">{accountName}</span>
+          </div>
+          <button
+            onClick={logout}
+            className="p-2 rounded-lg bg-card border border-border text-muted-foreground hover:text-foreground transition-colors"
+            title="Disconnect wallet"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       <div className="relative w-full max-w-[440px]">
         {/* Logo / Title */}
@@ -24,6 +45,8 @@ const Index = () => {
           <CheeseSwapWidget
             defaultInputTicker="WAX"
             defaultOutputTicker="CHEESE"
+            onLogin={login}
+            isLoggingIn={isLoggingIn}
           />
         </div>
 

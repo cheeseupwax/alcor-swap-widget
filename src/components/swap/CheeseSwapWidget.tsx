@@ -6,13 +6,15 @@ import { SwapTokenInput } from "./SwapTokenInput";
 import { TokenSelector } from "./TokenSelector";
 import { useSwapTokens } from "@/hooks/useSwapTokens";
 import { useSwapRoute } from "@/hooks/useSwapRoute";
+import { useWallet } from "@/contexts/WalletContext";
 import { type SwapToken, formatTokenAmount } from "@/lib/swapApi";
+import { toast } from "sonner";
 
 interface CheeseSwapWidgetProps {
   defaultInputTicker?: string;
   defaultOutputTicker?: string;
-  walletAccount?: string;
-  onSwapExecute?: (actions: unknown[]) => Promise<void>;
+  onLogin?: () => void;
+  isLoggingIn?: boolean;
 }
 
 const SLIPPAGE_PRESETS = [0.5, 1, 3];
@@ -20,10 +22,11 @@ const SLIPPAGE_PRESETS = [0.5, 1, 3];
 export function CheeseSwapWidget({
   defaultInputTicker = "WAX",
   defaultOutputTicker = "CHEESE",
-  walletAccount,
-  onSwapExecute,
+  onLogin,
+  isLoggingIn = false,
 }: CheeseSwapWidgetProps) {
   const { tokens } = useSwapTokens();
+  const { accountName, transact } = useWallet();
 
   const [tokenIn, setTokenIn] = useState<SwapToken | null>(null);
   const [tokenOut, setTokenOut] = useState<SwapToken | null>(null);
@@ -57,7 +60,7 @@ export function CheeseSwapWidget({
     tokenOut,
     amountIn,
     slippage,
-    walletAccount || "placeholder111"
+    accountName || "placeholder111"
   );
 
   const handleFlip = useCallback(() => {
@@ -84,18 +87,25 @@ export function CheeseSwapWidget({
     : "";
 
   const handleSwap = async () => {
-    if (!route || !onSwapExecute) return;
+    if (!route) return;
     setIsSwapping(true);
     try {
-      await onSwapExecute(route.actions);
-    } catch {
-      // Error handling would go here
+      await transact(route.actions);
+      toast.success("Swap successful!", {
+        description: `Swapped ${amountIn} ${tokenIn?.ticker} → ${estimatedOutput} ${tokenOut?.ticker}`,
+      });
+      setAmountIn("");
+    } catch (e: any) {
+      const msg = e?.message || "Swap failed";
+      if (!msg.includes("cancel") && !msg.includes("reject")) {
+        toast.error("Swap failed", { description: msg });
+      }
     } finally {
       setIsSwapping(false);
     }
   };
 
-  const canSwap = !!route && !!walletAccount && parseFloat(amountIn) > 0 && !routeLoading;
+  const canSwap = !!route && !!accountName && parseFloat(amountIn) > 0 && !routeLoading;
 
   return (
     <div className="w-full max-w-[440px] mx-auto">
@@ -149,7 +159,6 @@ export function CheeseSwapWidget({
           amount={amountIn}
           onAmountChange={setAmountIn}
           onTokenClick={() => setSelectorOpen("in")}
-          balance={walletAccount ? undefined : undefined}
         />
 
         {/* Flip button */}
@@ -263,26 +272,31 @@ export function CheeseSwapWidget({
         </div>
       )}
 
-      {/* Swap button */}
+      {/* Swap / Connect button */}
       <motion.button
-        whileHover={canSwap ? { scale: 1.01 } : {}}
-        whileTap={canSwap ? { scale: 0.99 } : {}}
-        onClick={walletAccount ? handleSwap : undefined}
-        disabled={walletAccount ? !canSwap || isSwapping : false}
+        whileHover={!accountName || canSwap ? { scale: 1.01 } : {}}
+        whileTap={!accountName || canSwap ? { scale: 0.99 } : {}}
+        onClick={!accountName ? onLogin : handleSwap}
+        disabled={accountName ? !canSwap || isSwapping : isLoggingIn}
         className={`w-full mt-4 py-4 rounded-xl font-bold text-base transition-all ${
-          !walletAccount
+          !accountName
             ? "bg-primary text-primary-foreground glow-gold hover:glow-gold-strong"
             : canSwap
             ? "bg-primary text-primary-foreground glow-gold hover:glow-gold-strong"
             : "bg-muted text-muted-foreground cursor-not-allowed"
         }`}
       >
-        {isSwapping ? (
+        {isLoggingIn ? (
+          <span className="flex items-center justify-center gap-2">
+            <Loader2 className="w-5 h-5 animate-spin" />
+            Connecting...
+          </span>
+        ) : isSwapping ? (
           <span className="flex items-center justify-center gap-2">
             <Loader2 className="w-5 h-5 animate-spin" />
             Swapping...
           </span>
-        ) : !walletAccount ? (
+        ) : !accountName ? (
           "Connect Wallet"
         ) : !tokenIn || !tokenOut ? (
           "Select tokens"
