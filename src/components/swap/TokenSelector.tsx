@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useSwapTokens } from "@/hooks/useSwapTokens";
+import { useTokenBalances } from "@/hooks/useTokenBalances";
+import { useWallet } from "@/contexts/WalletContext";
 import { type SwapToken, getTokenLogoUrl } from "@/lib/swapApi";
 
 interface TokenSelectorProps {
@@ -13,8 +15,21 @@ interface TokenSelectorProps {
 }
 
 export function TokenSelector({ open, onClose, onSelect, selectedToken }: TokenSelectorProps) {
-  const { filteredTokens, popularTokens, isLoading, search, setSearch } = useSwapTokens();
+  const { filteredTokens, popularTokens, tokens, isLoading, search, setSearch } = useSwapTokens();
+  const { accountName } = useWallet();
+  const balances = useTokenBalances(accountName, tokens);
   const [imgErrors, setImgErrors] = useState<Set<string>>(new Set());
+
+  // Sort: tokens with balances first (among non-popular filtered tokens)
+  const sortedFilteredTokens = useMemo(() => {
+    return [...filteredTokens].sort((a, b) => {
+      const balA = parseFloat(balances.get(tokenKey(a)) ?? "0");
+      const balB = parseFloat(balances.get(tokenKey(b)) ?? "0");
+      if (balA > 0 && balB <= 0) return -1;
+      if (balB > 0 && balA <= 0) return 1;
+      return 0;
+    });
+  }, [filteredTokens, balances]);
 
   const handleSelect = (token: SwapToken) => {
     onSelect(token);
@@ -70,8 +85,10 @@ export function TokenSelector({ open, onClose, onSelect, selectedToken }: TokenS
             </div>
           ) : (
             <div className="space-y-0.5 px-2">
-              {filteredTokens.map((t) => {
+              {sortedFilteredTokens.map((t) => {
                 const isSelected = selectedToken && tokenKey(selectedToken) === tokenKey(t);
+                const bal = balances.get(tokenKey(t));
+                const numBal = parseFloat(bal ?? "0");
                 return (
                   <button
                     key={tokenKey(t)}
@@ -84,10 +101,15 @@ export function TokenSelector({ open, onClose, onSelect, selectedToken }: TokenS
                     }`}
                   >
                     <TokenLogo token={t} imgErrors={imgErrors} setImgErrors={setImgErrors} size={32} />
-                    <div className="text-left">
+                    <div className="text-left flex-1">
                       <div className="font-semibold text-sm">{t.ticker}</div>
                       <div className="text-xs text-muted-foreground">{t.contract}</div>
                     </div>
+                    {accountName && numBal > 0 && (
+                      <span className="text-sm font-mono text-muted-foreground">
+                        {numBal.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                      </span>
+                    )}
                   </button>
                 );
               })}

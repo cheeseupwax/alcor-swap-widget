@@ -6,6 +6,7 @@ import { SwapTokenInput } from "./SwapTokenInput";
 import { TokenSelector } from "./TokenSelector";
 import { useSwapTokens } from "@/hooks/useSwapTokens";
 import { useSwapRoute } from "@/hooks/useSwapRoute";
+import { useTokenBalance } from "@/hooks/useTokenBalance";
 import { useWallet } from "@/contexts/WalletContext";
 import { type SwapToken, formatTokenAmount } from "@/lib/swapApi";
 import { toast } from "sonner";
@@ -54,6 +55,9 @@ export function CheeseSwapWidget({
   useEffect(() => {
     localStorage.setItem("cheese-swap-slippage", slippage.toString());
   }, [slippage]);
+
+  const balanceIn = useTokenBalance(accountName, tokenIn?.contract, tokenIn?.ticker);
+  const balanceOut = useTokenBalance(accountName, tokenOut?.contract, tokenOut?.ticker);
 
   const { route, isFetching: routeLoading, error: routeError } = useSwapRoute(
     tokenIn,
@@ -159,6 +163,7 @@ export function CheeseSwapWidget({
           amount={amountIn}
           onAmountChange={setAmountIn}
           onTokenClick={() => setSelectorOpen("in")}
+          balance={balanceIn ?? undefined}
         />
 
         {/* Flip button */}
@@ -180,6 +185,7 @@ export function CheeseSwapWidget({
           onTokenClick={() => setSelectorOpen("out")}
           readOnly
           loading={routeLoading && parseFloat(amountIn) > 0}
+          balance={balanceOut ?? undefined}
         />
       </div>
 
