@@ -41,7 +41,7 @@ export function CheeseSwapWidget({
   const [showRouteDetails, setShowRouteDetails] = useState(false);
   const [isSwapping, setIsSwapping] = useState(false);
 
-  // Set defaults when tokens load — use preferred contracts to avoid collisions
+  // Set defaults when tokens load
   useEffect(() => {
     if (tokens.length > 0 && !tokenIn) {
       const findToken = (ticker: string) => {
@@ -94,15 +94,15 @@ export function CheeseSwapWidget({
     }
   };
 
-  const estimatedOutput = route?.amount_received
-    ? formatTokenAmount(route.amount_received, tokenOut?.precision ?? 4)
+  const estimatedOutput = route?.output
+    ? formatTokenAmount(route.output, tokenOut?.precision ?? 4)
     : "";
 
   const handleSwap = async () => {
-    if (!route || !accountName) return;
+    if (!route || !accountName || !tokenIn) return;
     setIsSwapping(true);
     try {
-      const actions = normalizeRouteActions(route, accountName, tokenIn!.contract);
+      const actions = normalizeRouteActions(route, accountName, tokenIn.contract, amountIn, tokenIn);
       await transact(actions);
       toast.success("Swap successful!", {
         description: `Swapped ${amountIn} ${tokenIn?.ticker} → ${estimatedOutput} ${tokenOut?.ticker}`,
@@ -118,7 +118,7 @@ export function CheeseSwapWidget({
     }
   };
 
-  const canSwap = !!route && route.actions.length > 0 && !!accountName && parseFloat(amountIn) > 0 && !routeLoading;
+  const canSwap = !!route && !!route.memo && !!accountName && parseFloat(amountIn) > 0 && !routeLoading;
 
   const handleTokenSelect = useCallback((token: SwapToken) => {
     if (selectorSide === "in") setTokenIn(token);
@@ -180,7 +180,7 @@ export function CheeseSwapWidget({
           balance={balanceIn ?? undefined}
         />
 
-        {/* Flip button — between panels, not overlapping content */}
+        {/* Flip button */}
         <div className="flex justify-center -my-2 relative z-10">
           <motion.button
             whileHover={{ scale: 1.1 }}
@@ -221,9 +221,9 @@ export function CheeseSwapWidget({
             <span className="text-muted-foreground">
               1 {tokenIn?.ticker} ≈{" "}
               <span className="text-foreground font-mono">
-                {route.amount_received && amountIn
+                {route.output && amountIn
                   ? formatTokenAmount(
-                      route.amount_received / parseFloat(amountIn),
+                      route.output / parseFloat(amountIn),
                       tokenOut?.precision ?? 4
                     )
                   : "—"}{" "}
@@ -245,19 +245,19 @@ export function CheeseSwapWidget({
                 className="overflow-hidden"
               >
                 <div className="px-3 py-2 space-y-2 text-sm">
-                  {route.price_impact !== undefined && (
+                  {route.priceImpact !== undefined && (
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Price Impact</span>
                       <span
                         className={
-                          route.price_impact > 5
+                          route.priceImpact > 5
                             ? "text-destructive"
-                            : route.price_impact > 2
+                            : route.priceImpact > 2
                             ? "text-warning"
                             : "text-success"
                         }
                       >
-                        {route.price_impact.toFixed(2)}%
+                        {route.priceImpact.toFixed(2)}%
                       </span>
                     </div>
                   )}
@@ -268,7 +268,7 @@ export function CheeseSwapWidget({
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Min. Received</span>
                     <span className="text-foreground font-mono">
-                      {formatTokenAmount(route.minimum_received, tokenOut?.precision ?? 4)} {tokenOut?.ticker}
+                      {formatTokenAmount(route.minReceived, tokenOut?.precision ?? 4)} {tokenOut?.ticker}
                     </span>
                   </div>
                 </div>
@@ -319,7 +319,7 @@ export function CheeseSwapWidget({
         )}
       </motion.button>
 
-      {/* Token selector (mount only when opened for stable Dialog behavior) */}
+      {/* Token selector */}
       {selectorSide && (
         <TokenSelector
           key={selectorSide}
