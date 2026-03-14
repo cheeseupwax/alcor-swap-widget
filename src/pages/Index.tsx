@@ -51,7 +51,15 @@ const Index = () => {
         </div>
 
         <p className="text-center text-xs text-muted-foreground mt-4">
-          Powered by WaxOnEdge routing
+          Powered by{" "}
+          <a
+            href="https://alcor.exchange/v/wax/swap?input=wax-eosio.token&output=cheese-cheeseburger"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline"
+          >
+            Alcor Exchange
+          </a>
         </p>
       </div>
     </div>
